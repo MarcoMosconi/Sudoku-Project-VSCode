@@ -5,6 +5,8 @@ import logging
 import boto3
 from PIL import Image
 from botocore.config import Config
+import os
+import random
 
 from botocore.exceptions import ClientError
 
@@ -67,36 +69,70 @@ def main():
                             format="%(levelname)s: %(message)s")
 
         model_id = 'amazon.nova-canvas-v1:0'
+        input_folder = "content/conditioning_images"
+        output_folder = "content/generated_images"
+        processed_images_file = "processed_images.txt"
+        os.makedirs(output_folder, exist_ok=True)
 
-        # Read image from file and encode it as base64 string.
-        with open("content/conditioning_images/20250322_114041_resized.jpeg", "rb") as image_file:
-            input_image = base64.b64encode(image_file.read()).decode('utf8')
+        # # Generate 10 random seeds to be used for all images
+        # random.seed(12)  # Set a fixed seed for reproducibility
+        # seeds = [random.randint(0, 858993459) for _ in range(10)]
+        # logger.info(f"Using seeds: {seeds}")
 
-        body = json.dumps({
-            "taskType": "TEXT_IMAGE",
-            "textToImageParams": {
-                "text": "Add some numbers between 1 and 9. Include realistic lighting and background objects like a pen. Change perspective",
-                "negativeText": "blurry, digital screen, computer-generated, torn paper, low resolution, numbers lower than 1, numbers greater than 9",
-                "conditionImage": input_image,
-                "controlMode": "CANNY_EDGE",
-                "controlStrength":0.6
-            },
-            "imageGenerationConfig": {
-                "numberOfImages": 1,
-                "height": 512,
-                "width": 512,
-                "cfgScale": 10,
-                "seed":3
-            }
-        })
+        # Load already processed images
+        if os.path.exists(processed_images_file):
+            with open(processed_images_file, "r") as f:
+                processed_images = set(f.read().splitlines())
+        else:
+            processed_images = set()
 
-        image_bytes = generate_image(model_id=model_id,
-                                     body=body
-                                        )
-        image = Image.open(io.BytesIO(image_bytes))
-        output_path = "content/generated_images/generated_image.png"
-        image.save(output_path)
-        logger.info(f"Image saved to {output_path}")
+        for image_filename in os.listdir(input_folder):
+            if image_filename in processed_images:
+                logger.info(f"Skipping already processed image: {image_filename}")
+                continue
+            
+            input_image_path = os.path.join(input_folder, image_filename)
+            if not os.path.isfile(input_image_path):
+                continue
+
+            # Create a subfolder for the current conditioning image
+            conditioning_image_folder = os.path.join(output_folder, os.path.splitext(image_filename)[0])
+            os.makedirs(conditioning_image_folder, exist_ok=True)
+
+            with open(input_image_path, "rb") as image_file:
+                input_image = base64.b64encode(image_file.read()).decode('utf8')
+
+            for i in range(10):
+                seed = random.randint(0, 858993459)
+                logger.info(f"Using seed: {seed}")
+                body = json.dumps({
+                    "taskType": "TEXT_IMAGE",
+                    "textToImageParams": {
+                        "text": "Add some numbers between 1 and 9. Include realistic lighting and background objects like a pen. Change perspective",
+                        "negativeText": "blurry, digital screen, computer-generated, torn paper, low resolution, numbers lower than 1, numbers greater than 9",
+                        "conditionImage": input_image,
+                        "controlMode": "CANNY_EDGE",
+                        "controlStrength": 0.6
+                    },
+                    "imageGenerationConfig": {
+                        "numberOfImages": 1,
+                        "height": 512,
+                        "width": 512,
+                        "cfgScale": 10,
+                        "seed": seed
+                    }
+                })
+
+                image_bytes = generate_image(model_id=model_id, body=body)
+                image = Image.open(io.BytesIO(image_bytes))
+                output_path = os.path.join(conditioning_image_folder, f"{os.path.splitext(image_filename)[0]}_seed_{seed}.png")
+                image.save(output_path)
+                logger.info(f"Image saved to {output_path}")
+
+            # Mark image as processed
+            processed_images.add(image_filename)
+            with open(processed_images_file, "a") as f:
+                f.write(image_filename + "\n")
 
     except ClientError as err:
         message = err.response["Error"]["Message"]
@@ -109,7 +145,7 @@ def main():
 
     else:
         print(
-            f"Finished generating image with Amazon Nova Canvas  model {model_id}.")
+            f"Finished generating images with Amazon Nova Canvas model {model_id}.")
         
 
 if __name__ == "__main__":
