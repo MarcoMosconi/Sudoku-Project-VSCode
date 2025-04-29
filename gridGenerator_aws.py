@@ -7,7 +7,6 @@ from PIL import Image
 from botocore.config import Config
 import os
 import random
-
 from botocore.exceptions import ClientError
 
 class ImageError(Exception):

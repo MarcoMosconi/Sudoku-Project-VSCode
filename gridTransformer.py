@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import random
 import os
 import requests
-from sudokuCorruptor import generate_invalid_sudoku
 import time
 
 def create_sudoku_image(grid, cell_size=50):
@@ -77,12 +76,13 @@ def apply_perspective_transform(image, strength):
 
     # Ensure corners are within image bounds
     new_corners = np.clip(new_corners, 0, max(h, w))
-
+    
+    distance = random.randint(50, 70)
     reduction_matrix = np.float32([
-                                [50, 50],
-                                [-50, 50],
-                                [-50, -50],
-                                [50, -50]])
+                                [distance, distance],
+                                [-distance, distance],
+                                [-distance, -distance],
+                                [distance, -distance]])
 
     new_corners += reduction_matrix
 
@@ -164,7 +164,7 @@ def process_sudoku_grid(grid, output_dir, grid_name,
     output_path = os.path.join(output_dir, grid_name)
     cv2.imwrite(output_path, final)
 
-    return final
+    return output_path
 
 def get_grid(output_dir, grid_name):
     """Fetch a Sudoku grid from the API if the file does not already exist."""
@@ -173,28 +173,10 @@ def get_grid(output_dir, grid_name):
         print(f"File {output_path} already exists. Skipping API request")
         return None
 
-    time.sleep(random.randint(5, 9))
+    time.sleep(random.randint(4, 8))
     response = requests.get('https://sudoku-api.vercel.app/api/dosuku?query={newboard(limit:1){grids{value, solution}}}')
     data = response.json()
     sudoku = data['newboard']['grids'][0]['value']
     solution = data['newboard']['grids'][0]['solution']
     grid = random.choice([sudoku, solution])
     return grid
-
-for i in range(300):
-    # Check and fetch valid grid
-    grid_name = f"valid_grid_{i}.png"
-    grid = get_grid("transformed_images/valid_grids", grid_name)
-    if grid is not None:
-        result = process_sudoku_grid(grid, "transformed_images/valid_grids", grid_name)
-        print(f"Generated valid grid {i}")
-
-    # Check and fetch corrupted grid
-    grid_name = f"wrong_grid_{i}.png"
-    grid = get_grid("transformed_images/wrong_grids", grid_name)
-    if grid is not None:
-        corrupted_grid = generate_invalid_sudoku(grid)
-        result = process_sudoku_grid(corrupted_grid, "transformed_images/wrong_grids", grid_name)
-        print(f"Generated wrong grid {i}")
-
-
