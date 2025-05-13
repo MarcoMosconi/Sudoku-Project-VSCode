@@ -17,7 +17,7 @@ def preProcess(img, kernel_size):
     imgLaplacian2 = cv2.convertScaleAbs(imgLaplacian1)
 
     imgThresh = cv2.adaptiveThreshold(imgLaplacian2, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                  cv2.THRESH_BINARY_INV, 31, 3)
+                                  cv2.THRESH_BINARY_INV, 31, 2)
     kernel = np.ones((3, 3), np.uint8)
     imgOpening = cv2.morphologyEx(imgThresh, cv2.MORPH_OPEN, kernel, iterations=1)
 
@@ -69,10 +69,10 @@ def reorder(myPoints):
   myPointsNew = np.zeros((4, 1, 2), np.int32)
   add = myPoints.sum(1)
   myPointsNew[0] = myPoints[np.argmin(add)]
-  myPointsNew[3] = myPoints[np.argmax(add)]
+  myPointsNew[2] = myPoints[np.argmax(add)]
   diff = np.diff(myPoints, axis=1)
   myPointsNew[1] = myPoints[np.argmin(diff)]
-  myPointsNew[2] = myPoints[np.argmax(diff)]
+  myPointsNew[3] = myPoints[np.argmax(diff)]
   return myPointsNew
 
 def defineGrid(image_path, size, kernel_size):
@@ -95,11 +95,13 @@ def defineGrid(image_path, size, kernel_size):
         biggest = reorder(biggest)
         cv2.drawContours(imgContours, biggest, -1, (0, 0, 255), 20)
         pts1 = np.float32(biggest)
-        pts2 = np.float32([[0, 0], [size, 0], [0, size], [size, size]])
+        pts2 = np.float32([[0, 0], [size, 0], [size, size], [0, size]])
         matrix = cv2.getPerspectiveTransform(pts1, pts2)
         imgWarpColored = cv2.warpPerspective(img, matrix, (size, size))
         imgWarpColored = cv2.cvtColor(imgWarpColored, cv2.COLOR_BGR2GRAY)
+        print("Va")
     else:
+        print("Nun va")
         imgWarpColored = imgBlank.copy()
 
     # Plot only the final chosen image
@@ -112,4 +114,4 @@ def defineGrid(image_path, size, kernel_size):
 
     return imgWarpColored
 
-defineGrid("changed_background/valid_grids/valid_grid_0_2025-04-28_12-55-46.png", 400, 3)
+defineGrid("sample/sample_valid_grids/valid_grid_5_2025-04-28_13-07-23.png", 400, 3)

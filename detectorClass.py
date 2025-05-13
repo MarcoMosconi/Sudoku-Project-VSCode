@@ -15,7 +15,8 @@ class SudokuDetector:
 
         strategies = [
             self._strategy_blur,
-            self._strategy_laplacian_kernel
+            self._strategy_laplacian_kernel,
+            self._strategy_hough_lines_p  # New strategy added
         ]
 
         best_score = -1
@@ -24,7 +25,9 @@ class SudokuDetector:
 
         for i, strategy in enumerate(strategies):
             try:
-                result, points, score = strategy(image.copy())
+                result, points = strategy(image.copy())
+                score = self._evaluate_grid_quality(result)
+                    
                 if self.debug:
                     print(f"Strategy {i+1} score: {score}")
                     plt.figure(figsize=(10, 5))
@@ -53,44 +56,84 @@ class SudokuDetector:
             cv2.putText(img, "Detection failed", (20, 40), 
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             return img, None, False
-        
+    
+    def group_lines(self, lines, threshold=20):
+        grouped = []
+        for line in lines:
+            if not grouped or abs(line - grouped[-1]) > threshold:
+                grouped.append(line)
+        return grouped
 
-    def _validate_grid(self, points, image_shape):
-        if points is None or len(points) != 4:
-            return 0
-        print("Image shape:", image_shape)
-        # Convert to numpy array if not already
-        points = np.array(points)
-        print(f"Points: {points}")
+    def _evaluate_grid_quality(self, extracted_grid):
+        try:
+            grid = extracted_grid.copy()
+            edges = cv2.Canny(grid, 50, 150)
+            lines = cv2.HoughLines(edges, 1, np.pi/180, threshold=100)
+            
+            if lines is None:
+                return 0.0
+            
+            horizontal_lines = []
+            vertical_lines = []
+            for line in lines:
+                rho, theta = line[0]
+                if (theta < 0.26) or (theta > 2.88):  
+                    vertical_lines.append(rho)
+                elif (theta > 1.44) and (theta < 1.70):  
+                    horizontal_lines.append(rho)
+            horizontal_lines.sort()
+            vertical_lines.sort()
+
+            horizontal_lines = self.group_lines(horizontal_lines)
+            vertical_lines = self.group_lines(vertical_lines)
+
+            # Plot the image with detected lines
+            # if self.debug:
+            #     img_with_lines = cv2.cvtColor(grid, cv2.COLOR_GRAY2BGR)
+            #     for rho in horizontal_lines:
+            #         a, b = np.cos(np.pi / 2), np.sin(np.pi / 2)
+            #         x0, y0 = a * rho, b * rho
+            #         pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
+            #         pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
+            #         cv2.line(img_with_lines, pt1, pt2, (0, 255, 0), 2)
+            #     for rho in vertical_lines:
+            #         a, b = np.cos(0), np.sin(0)
+            #         x0, y0 = a * rho, b * rho
+            #         pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
+            #         pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
+            #         cv2.line(img_with_lines, pt1, pt2, (255, 0, 0), 2)
+            #     plt.figure(figsize=(10, 5))
+            #     plt.imshow(cv2.cvtColor(img_with_lines, cv2.COLOR_BGR2RGB))
+            #     plt.title('Detected Lines')
+            #     plt.show()
+            
+            h_position_score = 0.0
+            v_position_score = 0.0
+            
+            if len(horizontal_lines) >= 7:
+                h_position_score = (1 - abs(horizontal_lines[0]) / grid.shape[0]) + (1 - abs(horizontal_lines[-1] - grid.shape[0]) / grid.shape[0])
+                h_position_score = max(0, h_position_score / 2)  
+
+            if len(vertical_lines) >= 7:
+                v_position_score = (1 - abs(vertical_lines[0]) / grid.shape[1]) + (1 - abs(vertical_lines[-1] - grid.shape[1]) / grid.shape[1])
+                v_position_score = max(0, v_position_score / 2)  
+
+            h_score = min(len(horizontal_lines) / 9, 1.0) * 0.8 + h_position_score * 0.2
+            v_score = min(len(vertical_lines) / 9, 1.0) * 0.8 + v_position_score * 0.2
+            
+            final_score = 0.5 * h_score + 0.5 * v_score
+            
+            if self.debug:
+                print(f"Horizontal lines: {len(horizontal_lines)}, Vertical lines: {len(vertical_lines)}")
+                print(f"Horizontal valid: {h_score}, Vertical valid: {v_score}")
+                print(f"Final grid quality score: {final_score:.2f}")
+            
+            return final_score
         
-        # Calculate area - should be substantial portion of the image
-        area = cv2.contourArea(points)
-        print(f"Area: {area}")
-        image_area = image_shape[0] * image_shape[1]
-        print(f"Image Area: {image_area}")
-        area_ratio = area / image_area
-        print(f"Area Ratio: {area_ratio}")
-        # Grid should be at least 10% of image but not more than 98%
-        if area_ratio < 0.1 or area_ratio > 0.98:
-            return 0
-        
-        # Check if shape is approximately square
-        # Get bounding rect dimensions
-        x, y, w, h = cv2.boundingRect(points)
-        aspect_ratio = max(w/h, h/w)  # Will be 1 for a perfect square
-        
-        # Sudoku grid should be approximately square (allowing some perspective distortion)
-        if aspect_ratio > 1.5:
-            return 0
-        
-        # Calculate score based on how square it is and its size
-        squareness_score = 1 - min(1, (aspect_ratio - 1))
-        size_score = min(area_ratio * 2, 1)  # Favor larger grids up to 50% of image
-        
-        # Final score is weighted combination
-        score = 0.6 * squareness_score + 0.4 * size_score
-        
-        return score
+        except Exception as e:
+            if self.debug:
+                print(f"Error evaluating grid quality: {str(e)}")
+            return 0.0
 
     def reorder(self, myPoints):
         myPoints = myPoints.reshape((4, 2))
@@ -105,14 +148,13 @@ class SudokuDetector:
 
 
     def biggestContour(self, contours, img):
-        contour_images = []  # Store intermediate contour images
+        contour_images = []  
         biggest = np.array([])
         max_area = 0
-        max_score = -1
 
         for i in contours:
             area = cv2.contourArea(i)
-            if area > 50:
+            if area > 50:  
                 peri = cv2.arcLength(i, True)
                 epsilon = 0.02
                 approx = cv2.approxPolyDP(i, epsilon * peri, True)
@@ -120,20 +162,17 @@ class SudokuDetector:
                     epsilon += 0.01
                     approx = cv2.approxPolyDP(i, epsilon * peri, True)
                 imgBigContour = img.copy()
-                if len(approx) == 4:
+
+                if len(approx) == 4 and area > max_area:
                     approx = self.reorder(approx)
-                    score = self._validate_grid(approx, img.shape)
-                    if score > max_score and area > max_area:
-                        cv2.drawContours(imgBigContour, approx, -1, (0, 0, 255), 20)
-                        biggest = approx
-                        max_area = area
-                        max_score = score
+                    cv2.drawContours(imgBigContour, approx, -1, (0, 0, 255), 20)
+                    biggest = approx
+                    max_area = area
                 else:
                     cv2.drawContours(imgBigContour, approx, -1, (0, 0, 255), 20)
-                contour_images.append(imgBigContour)  # Save the contour image
-        
-        print(biggest, max_area, max_score)
-        return biggest, max_area, contour_images, max_score
+                contour_images.append(imgBigContour)  
+        print(biggest, max_area)
+        return biggest, max_area, contour_images
 
     def extract_grid(self, img, points):
         imgContours = img.copy()
@@ -153,9 +192,9 @@ class SudokuDetector:
         return imgWarpColored
     
     def _strategy_blur(self, img, kernel_size=17):
-        if kernel_size < 1:  # Base case to prevent infinite recursion
+        if (kernel_size < 1):  # Base case to prevent infinite recursion
             print("Kernel size too small to continue processing.")
-            return np.zeros((self.size, self.size, 3), np.uint8), None, 0
+            return np.zeros((self.size, self.size, 3), np.uint8), None
         
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         imgBlur = cv2.GaussianBlur(imgGray, (kernel_size, kernel_size), 0)
@@ -163,38 +202,71 @@ class SudokuDetector:
         kernel = np.ones((3, 3), np.uint8)
         imgDilation = cv2.dilate(imgThreshold, kernel, iterations=1)
         
-        # Find contours
         contours, _ = cv2.findContours(imgDilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Look for the largest contour that could be a sudoku grid
-        biggest_contour, _, _, max_score = self.biggestContour(contours, img)
+        biggest_contour, _, _ = self.biggestContour(contours, img)
         
-        # Draw the result
         imgWarpColored = self.extract_grid(img, biggest_contour)
         
         edges = cv2.Canny(imgWarpColored, 50, 150)
         lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=80, maxLineGap=10)
         if lines is None:
-            imgWarpColored, biggest_contour, max_score = self._strategy_blur(img, kernel_size - 2)
+            imgWarpColored, biggest_contour = self._strategy_blur(img, kernel_size - 2)
 
-        return imgWarpColored, biggest_contour, max_score
+        return imgWarpColored, biggest_contour
     
-    def _strategy_laplacian_kernel(self, img):
+    def _strategy_laplacian_kernel(self, img, c=3):
+        if c < 1:  
+            print("Kernel size too small to continue processing.")
+            return np.zeros((self.size, self.size, 3), np.uint8), None
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         imgLaplacian1 = cv2.Laplacian(imgGray, cv2.CV_64F)
         imgLaplacian2 = cv2.convertScaleAbs(imgLaplacian1)
-        imgThreshold = cv2.adaptiveThreshold(imgLaplacian2, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 3)
+        imgThreshold = cv2.adaptiveThreshold(imgLaplacian2, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, c)
         kernel = np.ones((3, 3), np.uint8)
         imgOpening = cv2.morphologyEx(imgThreshold, cv2.MORPH_OPEN, kernel, iterations=1)
 
         contours, _ = cv2.findContours(imgOpening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-        biggest_contour, _, _, max_score = self.biggestContour(contours, img)
+        biggest_contour, _, _ = self.biggestContour(contours, img)
         
-        # Draw the result
         imgWarpColored = self.extract_grid(img, biggest_contour)
+
+        edges = cv2.Canny(imgWarpColored, 50, 150)
+        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=80, maxLineGap=10)
+        if lines is None:
+            imgWarpColored, biggest_contour = self._strategy_laplacian_kernel(img, c - 1)
         
-        return imgWarpColored, biggest_contour, max_score
+        return imgWarpColored, biggest_contour
+    
+    def _strategy_hough_lines_p(self, img, min_line_length=50, max_line_gap=10):
+        """
+        Strategy using cv2.HoughLinesP for grid detection.
+        """
+        imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(imgGray, 50, 150)
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, 
+                                minLineLength=min_line_length, maxLineGap=max_line_gap)
+
+        if lines is None:
+            if self.debug:
+                print("No lines detected using HoughLinesP.")
+            return np.zeros((self.size, self.size, 3), np.uint8), None
+
+        # Draw detected lines on a blank image
+        line_img = np.zeros_like(img)
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            cv2.line(line_img, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+        # Find contours from the line image
+        contours, _ = cv2.findContours(cv2.cvtColor(line_img, cv2.COLOR_BGR2GRAY), 
+                                       cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        biggest_contour, _, _ = self.biggestContour(contours, img)
+
+        imgWarpColored = self.extract_grid(img, biggest_contour)
+
+        return imgWarpColored, biggest_contour
     
     def process_dataset(self, folder_path, output_folder=None):
         if not os.path.exists(folder_path):
@@ -217,7 +289,6 @@ class SudokuDetector:
             'failure': 0
         }
         
-        # Process each image
         for i, filename in enumerate(image_files):
             try:
                 image_path = os.path.join(folder_path, filename)
@@ -228,25 +299,14 @@ class SudokuDetector:
                     stats['failure'] += 1
                     continue
                 
-                # Process the image
                 result, points, success = self.detect(image)
                 
                 if success:
-                    stats['success'] += 1
-
-                        
-                    # Save or display results
+                    stats['success'] += 1  
                     if output_folder:
                         base_name = os.path.splitext(filename)[0]
-                        
-                        # Save the detection result
                         result_path = os.path.join(output_folder, f"{base_name}_detection.jpg")
                         cv2.imwrite(result_path, result)
-                        
-                        # Save the extracted grid if available
-                        if result is not None:
-                            grid_path = os.path.join(output_folder, f"{base_name}_grid.jpg")
-                            cv2.imwrite(grid_path, result)
                     
                     if self.debug:
                         print(f"Successfully processed {filename} ({i+1}/{len(image_files)})")
@@ -274,20 +334,19 @@ class SudokuDetector:
 # Example usage:
 detector = SudokuDetector(debug=True)
 
-# Process a single image
-image = cv2.imread('changed_background/valid_grids/valid_grid_0_2025-04-28_12-55-46.png')
-result, points, success = detector.detect(image)
+# # Process a single image
+# image = cv2.imread('sample/sample_valid_grids/valid_grid_5_2025-04-28_13-07-23.png')
+# result, points, success = detector.detect(image)
 
-if success and points is not None:
-    grid = detector.extract_grid(image, points)
-    plt.figure(figsize=(10, 5))
-    plt.subplot(121)
-    plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-    plt.title('Detection')
-    plt.subplot(122)
-    plt.imshow(cv2.cvtColor(grid, cv2.COLOR_BGR2RGB))
-    plt.title('Extracted Grid')
-    plt.show()
+# if success and points is not None:
+#     plt.figure(figsize=(10, 5))
+#     plt.subplot(121)
+#     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+#     plt.title('Original')
+#     plt.subplot(122)
+#     plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+#     plt.title('Extracted Grid')
+#     plt.show()
 
-# # Process an entire dataset
-# stats = detector.process_dataset('path/to/dataset', 'path/to/output')
+# Process an entire dataset
+stats = detector.process_dataset('sample/sample_valid_grids', 'sample/sample_extracted_valid_grids')

@@ -16,6 +16,19 @@ def preProcess(img, kernel_size):
     imgThreshold = cv2.adaptiveThreshold(imgBlur, 255, 1, 1, 11, 2)
     kernel = np.ones((3, 3), np.uint8)
     imgDilation = cv2.dilate(imgThreshold, kernel, iterations=1)
+
+    # Display all images together
+    images = [imgGray, imgBlur, imgThreshold, imgDilation]
+    titles = ["Grayscale Image", "Blur Image", "Threshold Image", "Dilation Image"]
+
+    plt.figure(figsize=(10, 8))
+    for i, (image, title) in enumerate(zip(images, titles)):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(image, cmap='gray')
+        plt.title(title)
+        plt.axis('off')
+    plt.tight_layout()
+    plt.show()
     return imgDilation, imgBlur, imgThreshold
 
 def biggestContour(contours, img):
@@ -81,24 +94,14 @@ def defineGrid(image_path, size, kernel_size):
 
     img = cv2.resize(img, (size, size))
 
-    # Plot all images together in a grid layout
-    images_to_plot = [img, imgBlur, imgThreshold] + contour_images + [imgWarpColored]
-    titles = ["Original Image", "Blurred Image", "Threshold Image"] + \
-             [f"Contour {i+1}" for i in range(len(contour_images))] + ["Final Image"]
-
-    num_images = len(images_to_plot)
-    cols = 3  # Number of columns in the grid
-    rows = (num_images + cols - 1) // cols  # Calculate the number of rows
-
-    plt.figure(figsize=(15, 5 * rows))
-    for i, (image, title) in enumerate(zip(images_to_plot, titles)):
-        plt.subplot(rows, cols, i + 1)
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB) if len(image.shape) == 3 else image, cmap='gray')
-        plt.title(title)
-        plt.axis('off')
+    # Plot only the final detected grid
+    plt.figure(figsize=(5, 5))
+    plt.imshow(imgWarpColored, cmap='gray')
+    plt.title("Final Detected Grid")
+    plt.axis('off')
     plt.tight_layout()
     plt.show()
 
     return imgWarpColored
 
-defineGrid("changed_background/valid_grids/valid_grid_0_2025-04-28_12-55-46.png", 400, 17)
+defineGrid("sample/sample_wrong_grids/20250320_181133.jpg", 400, 17)
