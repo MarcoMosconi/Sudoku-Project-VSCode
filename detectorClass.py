@@ -21,28 +21,49 @@ class SudokuDetector:
 
         best_score = -1
         best_result = None
-        best_points = None
+        # best_points = None
 
         for i, strategy in enumerate(strategies):
             try:
-                result, points = strategy(image.copy())
-                score = self._evaluate_grid_quality(result)
+                result = strategy(image.copy())
+                if isinstance(result, list):
+                    for j, res in enumerate(result):
+                        score = self._evaluate_grid_quality(res)
+                        if score > best_score:
+                            best_score = score
+                            best_result = res
+                            # best_points = points
+                else:
+                    score = self._evaluate_grid_quality(result)
+                    if score > best_score:
+                        best_score = score
+                        best_result = result
+                        # best_points = points
                     
                 if self.debug:
-                    print(f"Strategy {i+1} score: {score}")
-                    plt.figure(figsize=(10, 5))
-                    plt.subplot(121)
-                    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-                    plt.title('Original')
-                    plt.subplot(122)
-                    plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-                    plt.title(f'Strategy {i+1} (Score: {score:.2f})')
-                    plt.show()
-                
-                if score > best_score:
-                    best_score = score
-                    best_result = result
-                    best_points = points
+                    if isinstance(result, list):
+                        for j, res in enumerate(result):
+                            score = self._evaluate_grid_quality(res)
+                            print(f"Strategy {i+j+1} score: {score}")
+                            plt.figure(figsize=(10, 5))
+                            plt.subplot(121)
+                            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                            plt.title('Original')
+                            plt.subplot(122)
+                            plt.imshow(cv2.cvtColor(res, cv2.COLOR_BGR2RGB))
+                            plt.title(f'Strategy {i+j+1} (Score: {score:.2f})')
+                            plt.show()
+                    else: 
+                        score = self._evaluate_grid_quality(result)
+                        print(f"Strategy {i+1} score: {score}")
+                        plt.figure(figsize=(10, 5))
+                        plt.subplot(121)
+                        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                        plt.title('Original')
+                        plt.subplot(122)
+                        plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+                        plt.title(f'Strategy {i+1} (Score: {score:.2f})')
+                        plt.show()
 
             except Exception as e:
                 if self.debug:
@@ -50,7 +71,7 @@ class SudokuDetector:
                 continue
         
         if best_score > 0:
-            return best_result, best_points, True
+            return best_result, True
         else:
             # Fallback to the original image with a message
             cv2.putText(img, "Detection failed", (20, 40), 
@@ -75,52 +96,79 @@ class SudokuDetector:
             
             horizontal_lines = []
             vertical_lines = []
+            img_with_lines = cv2.cvtColor(grid, cv2.COLOR_GRAY2BGR)  # Convert to color for visualization
+
             for line in lines:
                 rho, theta = line[0]
-                if (theta < 0.26) or (theta > 2.88):  
+                if (theta < 0.1) or (theta > 3):  
                     vertical_lines.append(rho)
-                elif (theta > 1.44) and (theta < 1.70):  
+                elif (theta > 1.5) and (theta < 1.6):  
                     horizontal_lines.append(rho)
+
+                # Draw the line on the image
+                a, b = np.cos(theta), np.sin(theta)
+                x0, y0 = a * rho, b * rho
+                pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
+                pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
+                cv2.line(img_with_lines, pt1, pt2, (0, 255, 0), 1)
+
             horizontal_lines.sort()
             vertical_lines.sort()
 
             horizontal_lines = self.group_lines(horizontal_lines)
             vertical_lines = self.group_lines(vertical_lines)
 
-            # Plot the image with detected lines
+            # # Plot the image with detected lines
             # if self.debug:
-            #     img_with_lines = cv2.cvtColor(grid, cv2.COLOR_GRAY2BGR)
+            #     plt.figure(figsize=(15, 10))
+            #     plt.subplot(131)
+            #     plt.imshow(cv2.cvtColor(img_with_lines, cv2.COLOR_BGR2RGB))
+            #     plt.title('All Detected Lines')
+
+            #     # Plot horizontal lines
+            #     horizontal_img = np.zeros_like(img_with_lines)
             #     for rho in horizontal_lines:
             #         a, b = np.cos(np.pi / 2), np.sin(np.pi / 2)
             #         x0, y0 = a * rho, b * rho
             #         pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
             #         pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
-            #         cv2.line(img_with_lines, pt1, pt2, (0, 255, 0), 2)
+            #         cv2.line(horizontal_img, pt1, pt2, (0, 255, 0), 1)
+            #     plt.subplot(132)
+            #     plt.imshow(cv2.cvtColor(horizontal_img, cv2.COLOR_BGR2RGB))
+            #     plt.title('Horizontal Lines')
+
+            #     # Plot vertical lines
+            #     vertical_img = np.zeros_like(img_with_lines)
             #     for rho in vertical_lines:
             #         a, b = np.cos(0), np.sin(0)
             #         x0, y0 = a * rho, b * rho
             #         pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
             #         pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
-            #         cv2.line(img_with_lines, pt1, pt2, (255, 0, 0), 2)
-            #     plt.figure(figsize=(10, 5))
-            #     plt.imshow(cv2.cvtColor(img_with_lines, cv2.COLOR_BGR2RGB))
-            #     plt.title('Detected Lines')
+            #         cv2.line(vertical_img, pt1, pt2, (0, 255, 0), 1)
+            #     plt.subplot(133)
+            #     plt.imshow(cv2.cvtColor(vertical_img, cv2.COLOR_BGR2RGB))
+            #     plt.title('Vertical Lines')
+
             #     plt.show()
-            
+
             h_position_score = 0.0
             v_position_score = 0.0
+            print(f"Horizontal lines: {horizontal_lines}, \n Vertical lines: {vertical_lines}")
+            print(grid.shape)
             
             if len(horizontal_lines) >= 7:
-                h_position_score = (1 - abs(horizontal_lines[0]) / grid.shape[0]) + (1 - abs(horizontal_lines[-1] - grid.shape[0]) / grid.shape[0])
+                h_position_score = abs(horizontal_lines[0] - grid.shape[0]) / grid.shape[0] + abs(horizontal_lines[-1]) / grid.shape[0]
                 h_position_score = max(0, h_position_score / 2)  
 
             if len(vertical_lines) >= 7:
-                v_position_score = (1 - abs(vertical_lines[0]) / grid.shape[1]) + (1 - abs(vertical_lines[-1] - grid.shape[1]) / grid.shape[1])
+                v_position_score = abs(vertical_lines[0]) / grid.shape[1] + abs(vertical_lines[-1]) / grid.shape[1]
                 v_position_score = max(0, v_position_score / 2)  
 
-            h_score = min(len(horizontal_lines) / 9, 1.0) * 0.8 + h_position_score * 0.2
-            v_score = min(len(vertical_lines) / 9, 1.0) * 0.8 + v_position_score * 0.2
+            h_score = min(len(horizontal_lines) / 10, 1.0) * 0.5 + h_position_score * 0.5
+            v_score = min(len(vertical_lines) / 10, 1.0) * 0.5 + v_position_score * 0.5
             
+            #(1-abs(10-len(horizontal_lines))/10)
+
             final_score = 0.5 * h_score + 0.5 * v_score
             
             if self.debug:
@@ -194,7 +242,7 @@ class SudokuDetector:
     def _strategy_blur(self, img, kernel_size=17):
         if (kernel_size < 1):  # Base case to prevent infinite recursion
             print("Kernel size too small to continue processing.")
-            return np.zeros((self.size, self.size, 3), np.uint8), None
+            return np.zeros((self.size, self.size, 3), np.uint8)
         
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         imgBlur = cv2.GaussianBlur(imgGray, (kernel_size, kernel_size), 0)
@@ -211,14 +259,14 @@ class SudokuDetector:
         edges = cv2.Canny(imgWarpColored, 50, 150)
         lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=80, maxLineGap=10)
         if lines is None:
-            imgWarpColored, biggest_contour = self._strategy_blur(img, kernel_size - 2)
+            imgWarpColored = self._strategy_blur(img, kernel_size - 2)
 
-        return imgWarpColored, biggest_contour
+        return imgWarpColored
     
     def _strategy_laplacian_kernel(self, img, c=3):
         if c < 1:  
             print("Kernel size too small to continue processing.")
-            return np.zeros((self.size, self.size, 3), np.uint8), None
+            return np.zeros((self.size, self.size, 3), np.uint8)
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         imgLaplacian1 = cv2.Laplacian(imgGray, cv2.CV_64F)
         imgLaplacian2 = cv2.convertScaleAbs(imgLaplacian1)
@@ -235,38 +283,46 @@ class SudokuDetector:
         edges = cv2.Canny(imgWarpColored, 50, 150)
         lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=80, maxLineGap=10)
         if lines is None:
-            imgWarpColored, biggest_contour = self._strategy_laplacian_kernel(img, c - 1)
+            imgWarpColored = self._strategy_laplacian_kernel(img, c - 1)
         
-        return imgWarpColored, biggest_contour
+        return imgWarpColored
     
-    def _strategy_hough_lines_p(self, img, min_line_length=50, max_line_gap=10):
-        """
-        Strategy using cv2.HoughLinesP for grid detection.
-        """
+    def _strategy_hough_lines_p(self, img, min_line_length=50, max_line_gap=10, kernels = [5,7]):
+        imgWarpColored_list = []
+
+        def lines_detection(imgGray):
+            edges = cv2.Canny(imgGray, 50, 150)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, 
+                                    minLineLength=min_line_length, maxLineGap=max_line_gap)
+
+            if lines is None:
+                if self.debug:
+                    print("No lines detected using HoughLinesP.")
+                return np.zeros((self.size, self.size, 3), np.uint8), None
+
+            # Draw detected lines on a blank image
+            line_img = np.zeros_like(img)
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(line_img, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+            # Find contours from the line image
+            contours, _ = cv2.findContours(cv2.cvtColor(line_img, cv2.COLOR_BGR2GRAY), 
+                                        cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            biggest_contour, _, _ = self.biggestContour(contours, img)
+
+            imgWarpColored = self.extract_grid(img, biggest_contour)
+            imgWarpColored_list.append(imgWarpColored)
+        
         imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(imgGray, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, 
-                                minLineLength=min_line_length, maxLineGap=max_line_gap)
+        lines_detection(imgGray)
 
-        if lines is None:
-            if self.debug:
-                print("No lines detected using HoughLinesP.")
-            return np.zeros((self.size, self.size, 3), np.uint8), None
+        for kernel in kernels:
+            imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            imgBlur = cv2.GaussianBlur(imgGray, (kernel, kernel), 0)
+            lines_detection(imgBlur)
 
-        # Draw detected lines on a blank image
-        line_img = np.zeros_like(img)
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            cv2.line(line_img, (x1, y1), (x2, y2), (255, 255, 255), 2)
-
-        # Find contours from the line image
-        contours, _ = cv2.findContours(cv2.cvtColor(line_img, cv2.COLOR_BGR2GRAY), 
-                                       cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        biggest_contour, _, _ = self.biggestContour(contours, img)
-
-        imgWarpColored = self.extract_grid(img, biggest_contour)
-
-        return imgWarpColored, biggest_contour
+        return imgWarpColored_list
     
     def process_dataset(self, folder_path, output_folder=None):
         if not os.path.exists(folder_path):
@@ -299,7 +355,7 @@ class SudokuDetector:
                     stats['failure'] += 1
                     continue
                 
-                result, points, success = self.detect(image)
+                result, success = self.detect(image)
                 
                 if success:
                     stats['success'] += 1  
@@ -309,6 +365,14 @@ class SudokuDetector:
                         cv2.imwrite(result_path, result)
                     
                     if self.debug:
+                        plt.figure(figsize=(10, 5))
+                        plt.subplot(121)
+                        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+                        plt.title('Original')
+                        plt.subplot(122)
+                        plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+                        plt.title('Extracted Grid')
+                        plt.show()
                         print(f"Successfully processed {filename} ({i+1}/{len(image_files)})")
                         
                 else:
@@ -331,22 +395,22 @@ class SudokuDetector:
         return stats
 
 
-# Example usage:
+# # Example usage:
 detector = SudokuDetector(debug=True)
 
-# # Process a single image
-# image = cv2.imread('sample/sample_valid_grids/valid_grid_5_2025-04-28_13-07-23.png')
-# result, points, success = detector.detect(image)
+# Process a single image
+image = cv2.imread('sample/sample_valid_grids/valid_grid_10_2025-04-28_15-55-03.png')
+result, success = detector.detect(image)
 
-# if success and points is not None:
-#     plt.figure(figsize=(10, 5))
-#     plt.subplot(121)
-#     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-#     plt.title('Original')
-#     plt.subplot(122)
-#     plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-#     plt.title('Extracted Grid')
-#     plt.show()
+if success:
+    plt.figure(figsize=(10, 5))
+    plt.subplot(121)
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    plt.title('Original')
+    plt.subplot(122)
+    plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+    plt.title('Extracted Grid')
+    plt.show()
 
-# Process an entire dataset
-stats = detector.process_dataset('sample/sample_valid_grids', 'sample/sample_extracted_valid_grids')
+# # Process an entire dataset
+# stats = detector.process_dataset('sample/sample_valid_grids', 'sample/sample_extracted_valid_grids')

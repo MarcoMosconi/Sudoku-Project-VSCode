@@ -2,11 +2,11 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt  
 
-def preProcess(img, min_line_length=50, max_line_gap=10, size=400):
+def preProcess(img, min_line_length=1, max_line_gap=10, size=400):
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    imgBlur = cv2.GaussianBlur(imgGray, (0, 0), 0)
     edges = cv2.Canny(imgGray, 50, 150)
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, 
-                                minLineLength=min_line_length, maxLineGap=max_line_gap)
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=min_line_length, maxLineGap=max_line_gap)
     if lines is None:
         print("No lines detected using HoughLinesP.")
         return np.zeros((size, size, 3), np.uint8), None
@@ -18,8 +18,8 @@ def preProcess(img, min_line_length=50, max_line_gap=10, size=400):
         cv2.line(line_img, (x1, y1), (x2, y2), (255, 255, 255), 2)
 
     # Display all images together
-    images = [imgGray, line_img]
-    titles = ["Grayscale Image", "Line Image"]
+    images = [imgGray, edges, line_img]
+    titles = ["Grayscale Image","Canny Image", "Line Image"]
 
     plt.figure(figsize=(10, 8))
     for i, (image, title) in enumerate(zip(images, titles)):
