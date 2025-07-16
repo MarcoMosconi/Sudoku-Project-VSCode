@@ -17,7 +17,7 @@ def preProcess(img, kernel_size):
     imgLaplacian2 = cv2.convertScaleAbs(imgLaplacian1)
 
     imgThresh = cv2.adaptiveThreshold(imgLaplacian2, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                  cv2.THRESH_BINARY_INV, 31, 2)
+                                  cv2.THRESH_BINARY_INV, 31, 3)
     kernel = np.ones((3, 3), np.uint8)
     imgOpening = cv2.morphologyEx(imgThresh, cv2.MORPH_OPEN, kernel, iterations=1)
 
@@ -27,9 +27,9 @@ def preProcess(img, kernel_size):
 
     plt.figure(figsize=(10, 8))
     for i, (image, title) in enumerate(zip(images, titles)):
-        plt.subplot(2, 2, i + 1)
+        plt.subplot(1, 4, i + 1)
         plt.imshow(image, cmap='gray')
-        plt.title(title)
+        plt.title(title, fontsize=15)
         plt.axis('off')
     plt.tight_layout()
     plt.show()
@@ -114,4 +114,4 @@ def defineGrid(image_path, size, kernel_size):
 
     return imgWarpColored
 
-defineGrid("sample/sample_valid_grids/valid_grid_5_2025-04-28_13-07-23.png", 400, 3)
+defineGrid("image_generation/generated_images/valid_grids/valid_grid_26_2025-04-28_16-07-24.png", 400, 3)

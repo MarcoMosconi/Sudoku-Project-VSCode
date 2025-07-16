@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 def preProcess(img, min_line_length=1, max_line_gap=10, size=400):
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    imgBlur = cv2.GaussianBlur(imgGray, (0, 0), 0)
+    # imgBlur = cv2.GaussianBlur(imgGray, (0, 0), 0)
     edges = cv2.Canny(imgGray, 50, 150)
     lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=min_line_length, maxLineGap=max_line_gap)
     if lines is None:
@@ -23,9 +23,9 @@ def preProcess(img, min_line_length=1, max_line_gap=10, size=400):
 
     plt.figure(figsize=(10, 8))
     for i, (image, title) in enumerate(zip(images, titles)):
-        plt.subplot(2, 2, i + 1)
+        plt.subplot(1, 3, i + 1)
         plt.imshow(image, cmap='gray')
-        plt.title(title)
+        plt.title(title, fontsize=15)
         plt.axis('off')
     plt.tight_layout()
     plt.show()

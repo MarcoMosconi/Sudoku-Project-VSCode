@@ -21,11 +21,11 @@ def preProcess(img, kernel_size):
     images = [imgGray, imgBlur, imgThreshold, imgDilation]
     titles = ["Grayscale Image", "Blur Image", "Threshold Image", "Dilation Image"]
 
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(20, 16))
     for i, (image, title) in enumerate(zip(images, titles)):
-        plt.subplot(2, 2, i + 1)
+        plt.subplot(1, 4, i + 1)
         plt.imshow(image, cmap='gray')
-        plt.title(title)
+        plt.title(title, fontsize=30)
         plt.axis('off')
     plt.tight_layout()
     plt.show()
