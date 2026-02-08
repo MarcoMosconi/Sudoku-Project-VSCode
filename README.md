@@ -1,7 +1,7 @@
 This project is designed to build a dataset of raw Sudoku puzzle images, processing those images to extract Sudoku grids and train several models to classify them as either solvable or not, combining neural and symbolic reasoning. 
 It includes utility scripts for dataset creation and validation, along with datasets and transformed images that are then used for training and evaluation of the designed models.
 Both a simple CNN and a CNN using symbolic reasoning were Sudoku rules are explicitely defined using the Scallopy library are tested.  
-Structure: 
+
 ### Project Structure
 ```
 Sudoku-Project-VSCode/
